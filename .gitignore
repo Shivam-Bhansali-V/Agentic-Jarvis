@@ -1,0 +1,37 @@
+# Python / Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Secrets and local configurations
+.env
+.env.*
+!.env.example
+
+# Vector Store & Checkpoints
+vector_store/
+data/whatsapp_session/
+data/sqlite_checkpoints/
+
+# Logging
+logs/
+*.log
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS artifacts
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

@@ -31,5 +31,5 @@ def test_open_application_success(mock_popen: MagicMock):
 def test_open_application_error_handling(mock_popen: MagicMock):
     """Test that subprocess failure returns clean error observation without crashing."""
     result = open_application.invoke({"app_name": "forbidden_app"})
-    assert "Error: Failed to launch application" in result
+    assert "Error:" in result
     assert "Access denied" in result

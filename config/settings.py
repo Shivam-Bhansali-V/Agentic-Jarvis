@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         description="Active LLM provider for agent reasoning",
     )
     model_name: str = Field(
-        default="gemini-3.8-flash",
+        default="gemini-3.7-flash",
         description="Model name/id to use with provider",
     )
     google_api_key: Optional[str] = Field(

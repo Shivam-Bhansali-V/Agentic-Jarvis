@@ -1,8 +1,8 @@
-"""File management tools for the ReAct agent: read_file and write_code_file with smart path resolution."""
+"""File management tools for the ReAct agent: read_file and write_code_file with smart path resolution and ambiguity handling."""
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from langchain_core.tools import tool
 
 # Supported text extensions
@@ -12,18 +12,17 @@ TEXT_EXTENSIONS = {
 }
 
 
-def resolve_smart_path(raw_path: str) -> Optional[Path]:
-    """Smartly resolves a file path across workspace, Desktop, Downloads, and Documents,
-    supporting ~ expansion and extension autocompletion.
+def find_matching_paths(raw_path: str) -> List[Path]:
+    """Finds all matching file paths across workspace, Desktop, Downloads, and Documents.
+    Returns exact match if found, or all fuzzy candidates matching the query.
     """
     clean_str = os.path.expanduser(os.path.expandvars(raw_path.strip().strip("'\"")))
     direct_path = Path(clean_str)
 
-    # 1. Direct path check (file or directory)
-    if direct_path.exists():
-        return direct_path.resolve()
+    # 1. Exact direct path check
+    if direct_path.is_file():
+        return [direct_path.resolve()]
 
-    # Common search roots on Windows
     home = Path.home()
     search_dirs = [
         Path.cwd(),
@@ -33,44 +32,68 @@ def resolve_smart_path(raw_path: str) -> Optional[Path]:
         home,
     ]
 
-    # Check if raw_path is relative and matches inside any search root
+    # Check for direct relative path in search roots
+    exact_matches = []
     for root in search_dirs:
         candidate = (root / clean_str).resolve()
-        if candidate.is_file():
-            return candidate
+        if candidate.is_file() and candidate not in exact_matches:
+            exact_matches.append(candidate)
 
-    # 2. Fuzzy / prefix match across search roots (if user omitted extension or gave partial name)
+    if exact_matches:
+        return exact_matches
+
+    # 2. Fuzzy / partial match across search roots
     stem_query = Path(clean_str).stem.lower()
+    matches: List[Path] = []
+    
     for root in search_dirs:
         if not root.exists() or not root.is_dir():
             continue
         try:
             for item in root.iterdir():
-                if item.is_file() and (item.stem.lower() == stem_query or stem_query in item.name.lower()):
-                    return item.resolve()
+                if item.is_file() and item not in matches:
+                    item_stem = item.stem.lower()
+                    item_name = item.name.lower()
+                    if stem_query == item_stem or stem_query in item_name or stem_query in item_stem:
+                        matches.append(item.resolve())
         except (PermissionError, OSError):
             continue
 
-    return None
+    return matches
 
 
 @tool
 def read_file(path: str) -> str:
     """Reads and returns the contents of a local file (.txt, .md, .py, .pdf, .docx, .xlsx).
-    Smartly searches the workspace, Desktop, Downloads, and Documents if a relative path is given.
+    Smartly searches the workspace, Desktop, Downloads, and Documents if a relative path or keyword is given.
+    If multiple files match the keyword, returns a list of matching files for user selection.
     
     Args:
-        path: Relative, absolute, or partial path to the file to read (e.g. 'notes.txt', '~/Desktop/resume.pdf').
+        path: Relative, absolute, or partial path/keyword to the file to read (e.g. 'notes.txt', 'resume').
         
     Returns:
-        The text content of the file, or a descriptive error message if reading fails.
+        The text content of the file, a list of matching options if ambiguous, or a descriptive error message.
     """
     try:
-        file_path = resolve_smart_path(path)
+        clean_str = os.path.expanduser(os.path.expandvars(path.strip().strip("'\"")))
+        direct_path = Path(clean_str)
+        if direct_path.exists() and direct_path.is_dir():
+            return f"Error: Path '{path}' is a directory, not a file."
+
+        matches = find_matching_paths(path)
         
-        if not file_path or not file_path.exists():
+        if not matches:
             return f"Error: File not found at path '{path}' (searched workspace, Desktop, Downloads, Documents)."
             
+        if len(matches) > 1:
+            options = "\n".join([f"{i+1}. {m.name} (Path: {m})" for i, m in enumerate(matches[:10])])
+            return (
+                f"Multiple matching files found for '{path}':\n{options}\n\n"
+                f"Please ask the user which specific file they would like to read."
+            )
+
+        file_path = matches[0]
+        
         if file_path.is_dir():
             return f"Error: Path '{path}' is a directory, not a file."
             

@@ -91,17 +91,49 @@ def create_agent_graph(
     # 1. Reasoning Node (LLM Call)
     def reasoning_node(state: AgentState) -> dict:
         messages = list(state["messages"])
-        
+        retrieved_context = state.get("retrieved_context", "")
+
+        # Build context section for system prompt
+        if retrieved_context:
+            context_block = (
+                "=== PERSONAL KNOWLEDGE BASE (retrieved) ===\n"
+                + retrieved_context
+                + "\n===========================================\n\n"
+            )
+        else:
+            context_block = ""
+
+        # Format system prompt with latest retrieved context
+        formatted_prompt = system_prompt.format(retrieved_context=context_block)
+
         # Ensure system prompt is the first message
         if not messages or not isinstance(messages[0], SystemMessage):
-            messages = [SystemMessage(content=system_prompt)] + messages
-            
+            messages = [SystemMessage(content=formatted_prompt)] + messages
+        else:
+            # Replace stale system message with freshly formatted one
+            messages = [SystemMessage(content=formatted_prompt)] + messages[1:]
+
         response = llm_with_tools.invoke(messages)
         current_loops = state.get("loop_count", 0) + 1
-        
+
+        # Extract rag_query results from the most recent tool messages so the
+        # next reasoning step sees the retrieved context in the system prompt.
+        new_context = retrieved_context
+        for msg in reversed(messages):
+            if hasattr(msg, "name") and msg.name == "rag_query":
+                import json as _json
+                try:
+                    tool_result = _json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                    if isinstance(tool_result, dict) and "chunks" in tool_result:
+                        new_context = "\n\n".join(tool_result["chunks"])
+                except Exception:
+                    pass
+                break
+
         return {
             "messages": [response],
             "loop_count": current_loops,
+            "retrieved_context": new_context,
         }
 
     # 2. Conditional Edge Router

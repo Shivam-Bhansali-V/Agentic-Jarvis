@@ -8,9 +8,12 @@ from typing_extensions import TypedDict
 
 class AgentState(TypedDict):
     """The central state dictionary maintained across ReAct graph steps."""
-    
+
     # Message history with automatic append reducer
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    
+
     # Execution metrics and safety safeguards
     loop_count: int
+
+    # Context retrieved from the RAG store, injected into the system prompt each turn
+    retrieved_context: str

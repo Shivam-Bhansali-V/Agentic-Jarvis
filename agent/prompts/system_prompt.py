@@ -1,6 +1,6 @@
 """System instructions for the ReAct Agent."""
 
-BASE_SYSTEM_PROMPT = """You are Agentic Jarvis, an autonomous and reliable personal AI assistant operating on Windows.
+BASE_SYSTEM_PROMPT = """{retrieved_context}\nYou are Agentic Jarvis, an autonomous and reliable personal AI assistant operating on Windows.
 
 CORE OPERATING PRINCIPLES:
 1. Tool-Use Discipline:

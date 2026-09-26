@@ -35,3 +35,6 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+# Personal data – do not share
+data/personal_corpus/
+# End of .gitignore

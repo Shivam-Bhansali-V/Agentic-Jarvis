@@ -17,4 +17,5 @@ This document records interactive test runs, smoke tests, and qualitative valida
 | Git initialized | Clean repo | PASS | Initialized with comprehensive `.gitignore` |
 | Directory layout | Full structure | PASS | All 12 project directories created |
 | `config.settings` | Loads `.env` | PASS | Validated with Pydantic BaseSettings |
-| Core library import | Clean imports | PENDING | Running in background `task-42` |
+| Core library import | Clean imports | PASS | `langgraph`, `chromadb`, `sentence-transformers`, `torch` all verified |
+| Automated Unit Suite | 100% pass | PASS | 4/4 tests passed in `tests/unit/test_environment.py` (51.05s) |

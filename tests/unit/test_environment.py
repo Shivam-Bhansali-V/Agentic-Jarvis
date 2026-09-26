@@ -30,7 +30,7 @@ def test_settings_load():
     from config.settings import settings
 
     assert settings.base_dir.exists()
-    assert settings.llm_provider in ["openai", "anthropic"]
+    assert settings.llm_provider in ["openai", "anthropic", "google"]
     assert settings.model_name != ""
     assert isinstance(settings.data_dir, Path)
 

@@ -20,13 +20,17 @@ class Settings(BaseSettings):
     )
 
     # Core LLM configurations
-    llm_provider: Literal["openai", "anthropic"] = Field(
-        default="openai",
+    llm_provider: Literal["openai", "anthropic", "google"] = Field(
+        default="google",
         description="Active LLM provider for agent reasoning",
     )
     model_name: str = Field(
-        default="gpt-4o",
+        default="gemini-3.8-flash",
         description="Model name/id to use with provider",
+    )
+    google_api_key: Optional[str] = Field(
+        default=None,
+        description="API key for Google Gemini",
     )
     openai_api_key: Optional[str] = Field(
         default=None,

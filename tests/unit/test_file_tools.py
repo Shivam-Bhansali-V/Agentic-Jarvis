@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 import pytest
-from tools.file_tools import read_file, write_code_file
+from tools.file_tools import read_file, write_code_file, resolve_smart_path
 
 
 def test_write_and_read_text_file(tmp_path: Path):
@@ -44,3 +44,16 @@ def test_read_directory_path(tmp_path: Path):
     result = read_file.invoke({"path": str(tmp_path)})
     assert "Error: Path" in result
     assert "is a directory" in result
+
+
+def test_smart_path_fuzzy_search(tmp_path: Path, monkeypatch):
+    """Test smart path resolution finding files without exact extension."""
+    test_doc = tmp_path / "my_resume.pdf"
+    test_doc.write_text("Resume Content", encoding="utf-8")
+    
+    # Monkeypatch search roots to include tmp_path
+    monkeypatch.setattr("tools.file_tools.Path.home", lambda: tmp_path)
+    
+    resolved = resolve_smart_path("my_resume")
+    assert resolved is not None
+    assert resolved.name == "my_resume.pdf"

@@ -1,9 +1,10 @@
 """OS process and application control tools for Windows."""
 
 import os
-import shutil
 import subprocess
+from pathlib import Path
 from langchain_core.tools import tool
+from tools.file_tools import resolve_smart_path
 
 # Common Windows application aliases mapped to system executables / protocol commands
 WINDOWS_APP_MAP = {
@@ -32,26 +33,34 @@ WINDOWS_APP_MAP = {
 
 @tool
 def open_application(app_name: str) -> str:
-    """Opens a Windows application by name or common alias (e.g. 'notepad', 'calculator', 'chrome', 'explorer').
+    """Opens a Windows application by name/alias (e.g. 'notepad', 'calculator', 'chrome', 'explorer')
+    or launches a specific document/file in its default Windows application.
     
     Args:
-        app_name: Name or alias of the application to launch (e.g. 'notepad', 'calculator').
+        app_name: Name/alias of the application (e.g. 'notepad') or name/path of a file to open.
         
     Returns:
-        Confirmation message that the application was launched, or an error description.
+        Confirmation message that the application/file was launched, or an error description.
     """
-    cleaned_name = app_name.strip().lower()
+    cleaned_name = app_name.strip()
+    lookup_key = cleaned_name.lower()
     
-    # 1. Check known alias mapping
-    target_exe = WINDOWS_APP_MAP.get(cleaned_name, app_name.strip())
+    # 1. Check if app_name refers to a local file on Desktop/Workspace/Downloads
+    matched_file = resolve_smart_path(cleaned_name)
+    if matched_file and matched_file.is_file():
+        try:
+            os.startfile(str(matched_file))
+            return f"Success: Opened file '{matched_file.name}' in its default application (path: {matched_file})."
+        except Exception as e:
+            return f"Error opening file '{matched_file}': {str(e)}"
+
+    # 2. Check known alias mapping
+    target_exe = WINDOWS_APP_MAP.get(lookup_key, cleaned_name)
     
     try:
-        # Check if executable exists in PATH or can be launched via Windows shell
-        # Launch detached without blocking the agent ReAct loop
         DETACHED_PROCESS = 0x00000008
         CREATE_NEW_PROCESS_GROUP = 0x00000200
         
-        # Use shell execution or subprocess.Popen
         subprocess.Popen(
             target_exe,
             shell=True,

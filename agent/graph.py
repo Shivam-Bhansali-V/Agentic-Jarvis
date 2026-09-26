@@ -1,4 +1,4 @@
-"""LangGraph StateGraph definition for the ReAct Agent Loop."""
+"""LangGraph StateGraph definition for the ReAct Agent Loop with Model Fallback Cascade."""
 
 import os
 from typing import List, Optional, Any
@@ -13,20 +13,48 @@ from agent.state import AgentState
 from agent.prompts.system_prompt import BASE_SYSTEM_PROMPT
 from tools import ALL_PHASE_1_TOOLS
 
+# Ordered fallback cascade for Google Gemini to handle 429 quota limits gracefully
+GEMINI_FALLBACK_CASCADE = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3-flash-preview",
+]
+
 
 def get_llm(provider: Optional[str] = None, model_name: Optional[str] = None) -> BaseChatModel:
-    """Factory creating the configured ChatModel instance based on application settings."""
+    """Factory creating the ChatModel instance with automated fallback degradation on rate limits."""
     active_provider = provider or settings.llm_provider
     active_model = model_name or settings.model_name
     
     if active_provider == "google":
         from langchain_google_genai import ChatGoogleGenerativeAI
         api_key = settings.google_api_key or os.environ.get("GOOGLE_API_KEY")
-        return ChatGoogleGenerativeAI(
-            model=active_model,
+        
+        # Build cascade list starting from configured model
+        cascade = [active_model] + [m for m in GEMINI_FALLBACK_CASCADE if m != active_model]
+        
+        primary_llm = ChatGoogleGenerativeAI(
+            model=cascade[0],
             google_api_key=api_key,
             temperature=0.1,
         )
+        
+        # Create fallback chain for subsequent model levels
+        fallbacks = [
+            ChatGoogleGenerativeAI(
+                model=m,
+                google_api_key=api_key,
+                temperature=0.1,
+            )
+            for m in cascade[1:]
+        ]
+        
+        return primary_llm.with_fallbacks(fallbacks)
+        
     elif active_provider == "openai":
         from langchain_openai import ChatOpenAI
         api_key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY")

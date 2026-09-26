@@ -1,8 +1,8 @@
-"""File management tools for the ReAct agent: read_file and write_code_file."""
+"""File management tools for the ReAct agent: read_file and write_code_file with smart path resolution."""
 
 import os
 from pathlib import Path
-from typing import Union
+from typing import Optional
 from langchain_core.tools import tool
 
 # Supported text extensions
@@ -12,23 +12,66 @@ TEXT_EXTENSIONS = {
 }
 
 
+def resolve_smart_path(raw_path: str) -> Optional[Path]:
+    """Smartly resolves a file path across workspace, Desktop, Downloads, and Documents,
+    supporting ~ expansion and extension autocompletion.
+    """
+    clean_str = os.path.expanduser(os.path.expandvars(raw_path.strip().strip("'\"")))
+    direct_path = Path(clean_str)
+
+    # 1. Direct path check (file or directory)
+    if direct_path.exists():
+        return direct_path.resolve()
+
+    # Common search roots on Windows
+    home = Path.home()
+    search_dirs = [
+        Path.cwd(),
+        home / "Desktop",
+        home / "Downloads",
+        home / "Documents",
+        home,
+    ]
+
+    # Check if raw_path is relative and matches inside any search root
+    for root in search_dirs:
+        candidate = (root / clean_str).resolve()
+        if candidate.is_file():
+            return candidate
+
+    # 2. Fuzzy / prefix match across search roots (if user omitted extension or gave partial name)
+    stem_query = Path(clean_str).stem.lower()
+    for root in search_dirs:
+        if not root.exists() or not root.is_dir():
+            continue
+        try:
+            for item in root.iterdir():
+                if item.is_file() and (item.stem.lower() == stem_query or stem_query in item.name.lower()):
+                    return item.resolve()
+        except (PermissionError, OSError):
+            continue
+
+    return None
+
+
 @tool
 def read_file(path: str) -> str:
     """Reads and returns the contents of a local file (.txt, .md, .py, .pdf, .docx, .xlsx).
+    Smartly searches the workspace, Desktop, Downloads, and Documents if a relative path is given.
     
     Args:
-        path: Relative or absolute path to the file to read.
+        path: Relative, absolute, or partial path to the file to read (e.g. 'notes.txt', '~/Desktop/resume.pdf').
         
     Returns:
         The text content of the file, or a descriptive error message if reading fails.
     """
     try:
-        file_path = Path(path).resolve()
+        file_path = resolve_smart_path(path)
         
-        if not file_path.exists():
-            return f"Error: File not found at path '{path}'."
+        if not file_path or not file_path.exists():
+            return f"Error: File not found at path '{path}' (searched workspace, Desktop, Downloads, Documents)."
             
-        if not file_path.is_file():
+        if file_path.is_dir():
             return f"Error: Path '{path}' is a directory, not a file."
             
         suffix = file_path.suffix.lower()
@@ -89,7 +132,8 @@ def write_code_file(filepath: str, code_content: str) -> str:
         Success confirmation message with path and byte size, or an error message.
     """
     try:
-        target_path = Path(filepath).resolve()
+        clean_str = os.path.expanduser(os.path.expandvars(filepath.strip().strip("'\"")))
+        target_path = Path(clean_str).resolve()
         
         # Ensure parent directories exist
         target_path.parent.mkdir(parents=True, exist_ok=True)
